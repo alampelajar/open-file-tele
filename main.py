@@ -52,6 +52,11 @@ def format_size(size: int) -> str:
     return f"{size / (1024**2):.2f} MB"
 
 
+def format_number(value: int) -> str:
+    """Format integers using Indonesian-style thousands separators."""
+    return f"{value:,}".replace(",", ".")
+
+
 def read_text_file(path: Path) -> str:
     for encoding in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
         try:
@@ -163,7 +168,7 @@ async def open_document(event):
             "🖥 Syntax   | text"
             "</pre>"
             f"\n🔖 Preview dipotong: {preview_chars:,} dari "
-            f"{total_chars:,} karakter."
+            f"{format_number(total_chars)} karakter."
         )
         await status.edit(metadata, parse_mode="html")
 
