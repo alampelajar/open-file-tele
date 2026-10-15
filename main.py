@@ -164,10 +164,10 @@ async def open_document(event):
             "───────────┼────────────────────────\n"
             f"📄 File     | {safe_name}\n"
             f"📦 Ukuran   | {format_size(path.stat().st_size)}\n"
-            f"🔢 Baris    | {line_count:,}\n"
+            f"🔢 Baris    | {format_number(line_count)}\n"
             "🖥 Syntax   | text"
             "</pre>"
-            f"\n🔖 Preview dipotong: {preview_chars:,} dari "
+            f"\n🔖 Preview dipotong: {format_number(preview_chars)} dari "
             f"{format_number(total_chars)} karakter."
         )
         await status.edit(metadata, parse_mode="html")
