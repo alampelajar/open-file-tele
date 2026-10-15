@@ -27,8 +27,9 @@ DOWNLOAD_DIR = BASE_DIR / "downloads"
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 
 PREVIEW_LINES = 100
+PREVIEW_MAX_CHARS = 2800
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
-TELEGRAM_TEXT_LIMIT = 3500
+TELEGRAM_TEXT_LIMIT = 3900
 
 logging.basicConfig(
     level=logging.INFO,
@@ -47,7 +48,7 @@ def format_size(size: int) -> str:
     if size < 1024:
         return f"{size} B"
     if size < 1024**2:
-        return f"{size / 1024:.2f} KB"
+        return f"{size / 1024:.1f} KB"
     return f"{size / (1024**2):.2f} MB"
 
 
@@ -60,24 +61,31 @@ def read_text_file(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
-def split_lines(lines: list[str], limit: int = 2600) -> list[str]:
-    """Chunk raw text before HTML escaping so entities are never cut in half."""
-    chunks: list[str] = []
-    current = ""
+def build_preview(lines: list[str]) -> tuple[str, int]:
+    """Return numbered preview text and the number of source lines shown."""
+    output: list[str] = []
+    used = 0
+    shown = 0
 
-    for line in lines:
-        pieces = [line[i:i + limit] for i in range(0, len(line), limit)] or [""]
-        for piece in pieces:
-            candidate = piece if not current else current + "\n" + piece
-            if len(candidate) > limit and current:
-                chunks.append(current)
-                current = piece
-            else:
-                current = candidate
+    for number, line in enumerate(lines[:PREVIEW_LINES], start=1):
+        numbered = f"{number:>4}. {line}"
+        # Account for newline separators. Truncate a single very long line too.
+        remaining = PREVIEW_MAX_CHARS - used
+        if remaining <= 0:
+            break
 
-    if current or not chunks:
-        chunks.append(current)
-    return chunks
+        if len(numbered) > remaining:
+            if remaining > 8:
+                numbered = numbered[: remaining - 3] + "..."
+                output.append(numbered)
+                shown += 1
+            break
+
+        output.append(numbered)
+        used += len(numbered) + 1
+        shown += 1
+
+    return "\n".join(output), shown
 
 
 @client.on(events.NewMessage(
@@ -88,7 +96,7 @@ async def open_document(event):
     replied = await event.get_reply_message()
     if not replied:
         await event.reply(
-            "Balas pesan dokumen <code>.txt</code> dengan perintah "
+            "Balas pesan yang berisi file <code>.txt</code> dengan "
             "<code>.open</code>.",
             parse_mode="html",
         )
@@ -113,11 +121,13 @@ async def open_document(event):
         return
 
     if document.size and document.size > MAX_FILE_SIZE:
-        await event.reply(f"File terlalu besar. Maksimal {format_size(MAX_FILE_SIZE)}.")
+        await event.reply(
+            f"File terlalu besar. Maksimal {format_size(MAX_FILE_SIZE)}."
+        )
         return
 
     local_path = DOWNLOAD_DIR / f"{uuid.uuid4().hex}.txt"
-    status = await event.reply("⏳ Sedang membaca file TXT...")
+    status = await event.reply("⏳ Sedang membuka file...")
 
     try:
         downloaded = await replied.download_media(file=str(local_path))
@@ -136,39 +146,43 @@ async def open_document(event):
         content = read_text_file(path)
         lines = content.splitlines()
         line_count = len(lines)
-        preview_lines = lines[:PREVIEW_LINES]
-
+        total_chars = len(content)
+        preview, shown_lines = build_preview(lines)
+        preview_chars = len(preview)
         safe_name = html.escape(Path(file_name).name)
+
+        # Format metadata as a compact Info / Value table, similar to the example.
         metadata = (
-            "<b>📂 Open — Informasi File</b>\n\n"
+            "<b>📂 Open</b>\n\n"
             "<pre>"
             "Info       | Value\n"
-            "-----------|----------------------\n"
-            f"File       | {safe_name}\n"
-            f"Ukuran     | {format_size(path.stat().st_size)}\n"
-            f"Baris      | {line_count:,}\n"
-            f"Preview    | {len(preview_lines)} dari {line_count} baris"
+            "───────────┼────────────────────────\n"
+            f"📄 File     | {safe_name}\n"
+            f"📦 Ukuran   | {format_size(path.stat().st_size)}\n"
+            f"🔢 Baris    | {line_count:,}\n"
+            "🖥 Syntax   | text"
             "</pre>"
+            f"\n🔖 Preview dipotong: {preview_chars:,} dari "
+            f"{total_chars:,} karakter."
         )
         await status.edit(metadata, parse_mode="html")
 
-        if not preview_lines:
-            await event.reply("📄 File kosong atau tidak memiliki baris teks.")
+        if not lines:
+            await event.reply("📄 File kosong atau tidak memiliki teks.")
             return
 
-        chunks = split_lines(preview_lines)
-        for index, chunk in enumerate(chunks, start=1):
-            safe_chunk = html.escape(chunk)
-            message = (
-                f"<b>Preview {index}/{len(chunks)}</b>\n"
-                f"<pre>{safe_chunk}</pre>"
-            )
-            # Chunks are kept small to stay comfortably under Telegram's limit.
-            await event.reply(message, parse_mode="html")
+        # Keep filename and preview in a separate, readable message.
+        preview_message = (
+            f"<b>📄 {safe_name}</b>\n"
+            f"<pre>{html.escape(preview)}</pre>"
+        )
+        await event.reply(preview_message, parse_mode="html")
 
-        if line_count > PREVIEW_LINES:
+        if line_count > shown_lines:
             await event.reply(
-                f"ℹ️ Preview dibatasi hingga {PREVIEW_LINES} baris pertama."
+                f"… Preview menampilkan {shown_lines} baris pertama "
+                f"(maksimal {PREVIEW_LINES} baris dan "
+                f"{PREVIEW_MAX_CHARS:,} karakter)."
             )
 
     except FloodWaitError as exc:
