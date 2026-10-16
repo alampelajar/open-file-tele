@@ -67,30 +67,28 @@ def read_text_file(path: Path) -> str:
 
 
 def build_preview(lines: list[str]) -> tuple[str, int]:
-    """Return numbered preview text and the number of source lines shown."""
+    """Return preview text without added line numbers."""
     output: list[str] = []
     used = 0
     shown = 0
 
-    for number, line in enumerate(lines[:PREVIEW_LINES], start=1):
-        numbered = f"{number:>4}. {line}"
-        # Account for newline separators. Truncate a single very long line too.
+    for line in lines[:PREVIEW_LINES]:
         remaining = PREVIEW_MAX_CHARS - used
         if remaining <= 0:
             break
 
-        if len(numbered) > remaining:
-            if remaining > 8:
-                numbered = numbered[: remaining - 3] + "..."
-                output.append(numbered)
+        # Keep original file content; do not add numbering at the left.
+        if len(line) > remaining:
+            if remaining > 3:
+                output.append(line[: remaining - 3] + "...")
                 shown += 1
             break
 
-        output.append(numbered)
-        used += len(numbered) + 1
+        output.append(line)
+        used += len(line) + 1
         shown += 1
 
-    return "\n".join(output), shown
+    return "\\n".join(output), shown
 
 
 @client.on(events.NewMessage(
