@@ -4,8 +4,10 @@ import logging
 import os
 import re
 import uuid
+from datetime import datetime
 from pathlib import Path
 
+from colorama import Fore, Style, init as colorama_init
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 from telethon.errors import FloodWaitError
@@ -31,11 +33,58 @@ PREVIEW_MAX_CHARS = 2800
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 TELEGRAM_TEXT_LIMIT = 3900
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s",
-)
+# Suppress Telethon's verbose network/update messages; show only useful app logs.
+logging.basicConfig(level=logging.WARNING)
+logging.getLogger("telethon").setLevel(logging.WARNING)
 logger = logging.getLogger("telegram-open")
+logger.setLevel(logging.INFO)
+logger.propagate = False
+
+class ConsoleFormatter(logging.Formatter):
+    COLORS = {
+        logging.INFO: Fore.CYAN,
+        logging.WARNING: Fore.YELLOW,
+        logging.ERROR: Fore.RED,
+        logging.CRITICAL: Fore.RED + Style.BRIGHT,
+    }
+
+    def format(self, record):
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        color = self.COLORS.get(record.levelno, "")
+        level = record.levelname
+        return (
+            f"{Fore.LIGHTBLACK_EX}{timestamp}{Style.RESET_ALL} "
+            f"{color}[{level}]{Style.RESET_ALL} {record.getMessage()}"
+        )
+
+
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(ConsoleFormatter())
+logger.addHandler(console_handler)
+
+colorama_init(autoreset=True)
+
+
+def print_banner(account_name: str, username: str | None) -> None:
+    os.system("cls" if os.name == "nt" else "clear")
+    print(Fore.MAGENTA + Style.BRIGHT + r"""
+  _____     ____  ____  _____ _   _ 
+ |_   _|   / __ \/ __ \|  __ \ \ | |
+   | |    | |  | | |  | | |__) |  \| |
+   | |    | |  | | |  | |  ___/| . ` |
+  _| |_   | |__| | |__| | |    | |\  |
+ |_____|   \\____/\\____/|_|    |_| \\_|
+""" + Style.RESET_ALL)
+    print(Fore.CYAN + Style.BRIGHT + "  TELEGRAM .OPEN USERBOT" + Style.RESET_ALL)
+    print(Fore.LIGHTBLACK_EX + "  " + "─" * 42 + Style.RESET_ALL)
+    print(f"  {Fore.GREEN}●{Style.RESET_ALL} Status   : {Fore.GREEN}ONLINE{Style.RESET_ALL}")
+    print(f"  {Fore.CYAN}▸{Style.RESET_ALL} Account  : {account_name}")
+    print(f"  {Fore.CYAN}▸{Style.RESET_ALL} Username : @{username}" if username else f"  {Fore.CYAN}▸{Style.RESET_ALL} Username : -")
+    print(f"  {Fore.CYAN}▸{Style.RESET_ALL} Command  : {Fore.YELLOW}.open{Style.RESET_ALL}")
+    print(f"  {Fore.CYAN}▸{Style.RESET_ALL} Preview  : {PREVIEW_LINES} lines / {PREVIEW_MAX_CHARS:,} chars")
+    print(Fore.LIGHTBLACK_EX + "  " + "─" * 42 + Style.RESET_ALL)
+    print(f"  {Fore.WHITE}Reply file .txt dengan .open untuk melihat preview.{Style.RESET_ALL}")
+    print(f"  {Fore.LIGHTBLACK_EX}Tekan Ctrl+C untuk berhenti.{Style.RESET_ALL}\\n")
 
 client = TelegramClient(
     str(BASE_DIR / "telegram_open_session"),
@@ -130,6 +179,7 @@ async def open_document(event):
         return
 
     local_path = DOWNLOAD_DIR / f"{uuid.uuid4().hex}.txt"
+    logger.info("Perintah .open diterima; mulai membaca %s", Path(file_name).name)
     status = await event.reply("⏳ Sedang membuka file...")
 
     try:
@@ -180,6 +230,12 @@ async def open_document(event):
             f"<pre>{html.escape(preview)}</pre>"
         )
         await event.reply(preview_message, parse_mode="html")
+        logger.info(
+            "Selesai: %s | %s | %s baris ditampilkan",
+            Path(file_name).name,
+            format_size(path.stat().st_size),
+            shown_lines,
+        )
 
         if line_count > shown_lines:
             await event.reply(
@@ -208,13 +264,8 @@ async def open_document(event):
 async def main():
     await client.start()
     me = await client.get_me()
-    print("=" * 50)
-    print("Telegram .open Userbot aktif")
-    print(f"Akun: {me.first_name}")
-    print(f"Username: @{me.username}" if me.username else "Username: -")
-    print("Cara pakai: balas pesan dokumen TXT dengan .open")
-    print("Tekan Ctrl+C untuk berhenti.")
-    print("=" * 50)
+    print_banner(me.first_name, me.username)
+    logger.info("Userbot siap menerima perintah.")
     await client.run_until_disconnected()
 
 
