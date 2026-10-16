@@ -86,7 +86,9 @@ def print_banner(account_name: str, username: str | None) -> None:
     print(f"  {Fore.WHITE}Reply file .txt dengan .open untuk melihat preview.{Style.RESET_ALL}")
     print(f"  {Fore.LIGHTBLACK_EX}Tekan Ctrl+C untuk berhenti.{Style.RESET_ALL}\n")
 
-\n\nclient = TelegramClient(
+
+
+client = TelegramClient(
     str(BASE_DIR / "telegram_open_session"),
     API_ID,
     API_HASH,
