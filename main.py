@@ -84,7 +84,7 @@ def print_banner(account_name: str, username: str | None) -> None:
     print(f"  {Fore.CYAN}▸{Style.RESET_ALL} Preview  : {PREVIEW_LINES} lines / {PREVIEW_MAX_CHARS:,} chars")
     print(Fore.LIGHTBLACK_EX + "  " + "─" * 42 + Style.RESET_ALL)
     print(f"  {Fore.WHITE}Reply file .txt dengan .open untuk melihat preview.{Style.RESET_ALL}")
-    print(f"  {Fore.LIGHTBLACK_EX}Tekan Ctrl+C untuk berhenti.{Style.RESET_ALL}\\n")
+    print(f"  {Fore.LIGHTBLACK_EX}Tekan Ctrl+C untuk berhenti.{Style.RESET_ALL}\n")
 
 \n\nclient = TelegramClient(
     str(BASE_DIR / "telegram_open_session"),
@@ -137,7 +137,7 @@ def build_preview(lines: list[str]) -> tuple[str, int]:
         used += len(line) + 1
         shown += 1
 
-    return "\\n".join(output), shown
+    return "\n".join(output), shown
 
 
 @client.on(events.NewMessage(
